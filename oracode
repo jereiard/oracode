@@ -1,0 +1,11 @@
+#!/bin/bash
+# Launch Oracode. The image defaults to the locally built tag 'oracode';
+# ORACODE_IMAGE, e.g. ORACODE_IMAGE=oracode ./oracode ...
+set -euo pipefail
+
+IMAGE="${ORACODE_IMAGE:-oracode}"
+
+docker run --gpus all --privileged --rm -it \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD":"$PWD" -w "$PWD" \
+  "$IMAGE" "$@"

@@ -1,0 +1,33 @@
+--- a/bin/bamsurgeon/mutation.py
++++ b/bin/bamsurgeon/mutation.py
+@@ -242,6 +242,14 @@
+                                     if args.requirepaired:
+                                         logger.warning(mutid + " skipped mutation due to --requirepaired")
+                                         return True, False, {}, {}, {}, {}
++                                    # Picard SamToFastq silently drops a record that is
++                                    # flagged paired when its mate record is absent. Mark
++                                    # this selected copy as a true orphan so it reaches the
++                                    # unpaired FASTQ and is not lost during realignment.
++                                    pread.alignment.flag &= ~(1 | 2 | 8 | 32 | 64 | 128)
++                                    pread.alignment.next_reference_id = -1
++                                    pread.alignment.next_reference_start = -1
++                                    pread.alignment.template_length = 0
+ 
+                             if extqname not in mutmates:
+                                 mutmates[extqname] = mate
+--- a/bin/bamsurgeon/replace_reads.py
++++ b/bin/bamsurgeon/replace_reads.py
+@@ -166,7 +166,12 @@
+         extqname = read.qname
+         newReads = []
+         if extqname in rdict:
+-            newRead = rdict[extqname][0 if read.is_read1 else 1 if read.is_read2 else 2]
++            read_slot = 0 if read.is_read1 else 1 if read.is_read2 else 2
++            newRead = rdict[extqname][read_slot]
++            # A paired-flagged target may have no mate record. Such reads are
++            # deliberately remapped as single-end and occupy the orphan slot.
++            if newRead is None:
++                newRead = rdict[extqname][2]
+             if keepqual:
+                 newRead.qual = read.qual
+                 #newRead.query_qualities = [42] * len(newRead.seq)

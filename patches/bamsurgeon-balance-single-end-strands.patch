@@ -1,0 +1,60 @@
+--- a/bin/addsnv.py
++++ b/bin/addsnv.py
+@@ -131,6 +131,18 @@
+     logger.info("%s len(readlist): %s" % (hapstr, str(len(readlist))))
+     readlist.sort()
+-    random.shuffle(readlist)
++    seed = "\n".join(name.split(",", 1)[0] for name in readlist)
++    random.Random(seed).shuffle(readlist)
++    if args.single:
++        forward = [name for name in readlist if not outreads[name].is_reverse]
++        reverse = [name for name in readlist if outreads[name].is_reverse]
++        readlist = []
++        # Alternating strands prevents a random low-depth spike-in from
++        # putting every ALT observation on one strand when both are present.
++        while forward or reverse:
++            if forward:
++                readlist.append(forward.pop())
++            if reverse:
++                readlist.append(reverse.pop())
+ 
+     if len(readlist) < int(args.mindepth):
+         logger.warning("%s too few reads in region (%s) skipping..." % (hapstr, str(len(readlist))))
+@@ -154,7 +166,7 @@
+     else:
+         logger.info("%s selected VAF: %f" % (hapstr, vaf))
+ 
+-    lastread = int(len(readlist)*vaf)
++    lastread = int(round(len(readlist)*vaf))
+ 
+     # pick at least args.minmutreads if possible
+     if lastread < int(args.minmutreads):
+--- a/bin/addindel.py
++++ b/bin/addindel.py
+@@ -86,6 +86,16 @@
+     logger.info("%s len(readlist): %d" % (mutid, len(readlist)))
+     readlist.sort()
+-    random.shuffle(readlist)
++    seed = "\n".join(name.split(",", 1)[0] for name in readlist)
++    random.Random(seed).shuffle(readlist)
++    if args.single:
++        forward = [name for name in readlist if not outreads[name].is_reverse]
++        reverse = [name for name in readlist if outreads[name].is_reverse]
++        readlist = []
++        while forward or reverse:
++            if forward:
++                readlist.append(forward.pop())
++            if reverse:
++                readlist.append(reverse.pop())
+ 
+     if len(readlist) < int(args.mindepth):
+         logger.warning("%s skipped, too few reads in region: %d" % (mutid, len(readlist)))
+@@ -109,7 +119,7 @@
+     else:
+         logger.info("%s selected VAF: %f" % (mutid, vaf))
+ 
+-    lastread = int(len(readlist)*vaf)
++    lastread = int(round(len(readlist)*vaf))
+ 
+     # pick at least args.minmutreads if possible
+     if lastread < int(args.minmutreads):

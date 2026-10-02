@@ -1,0 +1,8 @@
+#!/bin/bash
+# Open a shell inside the Oracode image (built tag: oracode).
+set -euo pipefail
+
+IMAGE="${ORACODE_IMAGE:-oracode}"
+
+docker run --user "$(id -u)":"$(id -g)" --gpus all --privileged --rm -it \
+  -v "$PWD":"$PWD" -w "$PWD" --entrypoint bash "$IMAGE"

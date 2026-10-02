@@ -1,0 +1,58 @@
+--- a/bin/bamsurgeon/common.py
++++ b/bin/bamsurgeon/common.py
+@@ -147,11 +147,13 @@
+     if paired:
+         if twofastq:  # two-fastq paired end
+             outfq_pair = [sub('bam$', '1.fastq', bam), sub('bam$', '2.fastq', bam)]
++            outfq_unpaired = sub('bam$', 'unpaired.fastq', bam)
+             cmd.append('F=' + outfq_pair[0])
+             cmd.append('F2=' + outfq_pair[1])
++            cmd.append('FU=' + outfq_unpaired)
+             subprocess.check_call(cmd)
+             assert os.path.exists(outfq_pair[0]) and os.path.exists(outfq_pair[1])
+-            return outfq_pair
++            return outfq_pair + [outfq_unpaired]
+         else:  # interleaved paired-end
+             outfq = sub('bam$', 'fastq', bam)
+             cmd.append('FASTQ=' + outfq)
+--- a/bin/bamsurgeon/aligners.py
++++ b/bin/bamsurgeon/aligners.py
+@@ -44,13 +44,35 @@
+     ''' remap bam file with supported alignment method. "options" param is a dict of aligner-specific required options '''
+     fastqs = bamtofastq(bamfn, picardjar, threads=threads, paired=paired, twofastq=(name not in INTERLEAVED_FASTQ_ALIGNERS))
+ 
+-    if len(fastqs) == 2:
+-        fq1, fq2 = fastqs
++    orphan_fq = fastqs[2] if len(fastqs) == 3 else None
++
++    if len(fastqs) >= 2:
++        fq1, fq2 = fastqs[:2]
+     else:
+         fq1 = fastqs[0]
+         fq2 = None
+ 
+-    remap_fastq(name, fq1, fastaref, bamfn, options, fq2=fq2, mutid=mutid, threads=threads, deltmp=deltmp)
++    if orphan_fq is None or os.path.getsize(orphan_fq) == 0:
++        if orphan_fq is not None and deltmp:
++            os.remove(orphan_fq)
++        remap_fastq(name, fq1, fastaref, bamfn, options, fq2=fq2, mutid=mutid, threads=threads, deltmp=deltmp)
++        return
++
++    paired_bam = bamfn + '.paired.bam'
++    orphan_bam = bamfn + '.unpaired.bam'
++    remap_fastq(name, fq1, fastaref, paired_bam, options, fq2=fq2,
++                mutid=mutid, threads=threads, deltmp=deltmp)
++    remap_fastq(name, orphan_fq, fastaref, orphan_bam, options, fq2=None,
++                mutid=mutid, threads=threads, deltmp=deltmp)
++    subprocess.check_call([
++        'samtools', 'merge', '-f', '-@', str(threads), bamfn,
++        paired_bam, orphan_bam
++    ])
++    subprocess.check_call(['samtools', 'index', bamfn])
++    for temporary in (paired_bam, orphan_bam):
++        os.remove(temporary)
++        if os.path.exists(temporary + '.bai'):
++            os.remove(temporary + '.bai')
+ 
+ 
+ def remap_fastq(name, fq1, fastaref, outbam, options, fq2=None, mutid='null', threads=1, deltmp=True):
